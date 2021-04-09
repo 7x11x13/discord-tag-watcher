@@ -3,7 +3,7 @@ import sqlite3, atexit, heapq, datetime
 from discord_music_tracker import config, logger
 
 # class to store temporary data in a set
-class TempSet(set):
+class TempSet:
     def __init__(self):
         self.last_added = [] # priority q with (datetime, value)
         self.values = set()
