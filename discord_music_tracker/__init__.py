@@ -1,7 +1,11 @@
 import os, logging, sys
 from configparser import ConfigParser
 
-logging.basicConfig(level=os.environ.get('LOGLEVEL', 'WARNING'))
+logging.basicConfig(
+    format='%(asctime)s %(levelname)-8s %(message)s',
+    level=os.environ.get('LOGLEVEL', 'WARNING'),
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 logger = logging.getLogger(__name__)
 
 __version__ = 'v0.0.1'

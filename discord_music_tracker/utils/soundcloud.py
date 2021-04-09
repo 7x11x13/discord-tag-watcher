@@ -50,20 +50,26 @@ async def update_following():
     for user_id, channel_ids in db.sc_following.items():
         try:
             artists = get_sc_collection(endpoints['following'].format(user_id))
-        except:
+            logger.debug(f'Got artists for {user_id}')
+        except Exception as e:
+            logging.info(f'Error while fetching user {user_id} following')
+            logging.info(e)
             return
         async for artist in artists:
             id = artist['id']
             for channel_id in channel_ids:
                 db.add_sc_artist(channel_id, id)
 
-async def __valid_tracks(tracks, last_updated):
+async def __valid_tracks(tracks, last_updated, tag=None):
     async for track in tracks:
         id = track['id']
-        if db.sc_artist_track_exists(id):
+        if not tag and db.sc_artist_track_exists(id):
             # already sent this song
             # and any songs before it
             break
+        if tag and db.sc_tag_track_exists(tag, id):
+            break
+
         date = datetime.datetime.fromisoformat(
             track['created_at'].replace('Z', '+00:00')
         )
@@ -78,7 +84,9 @@ async def update_artists(last_updated):
         try:
             tracks = get_sc_collection(endpoints['tracks'].format(artist_id))
             all_fail = False
-        except:
+        except Exception as e:
+            logging.info(f'Error while fetching artist {artist_id} tracks')
+            logging.info(e)
             continue
         async for track in __valid_tracks(tracks, last_updated):
             yield track, channel_ids
@@ -91,9 +99,11 @@ async def update_tags(last_updated):
         try:
             tracks = get_sc_collection(endpoints['tags'].format(tag))
             all_fail = False
-        except:
+        except Exception as e:
+            logging.info(f'Error while fetching tag {tag} tracks')
+            logging.info(e)
             continue
-        async for track in __valid_tracks(tracks, last_updated):
+        async for track in __valid_tracks(tracks, last_updated, tag):
             yield tag, track, channel_ids
     if all_fail and len(db.sc_tags) > 0:
         raise Exception('All update_tags failed')

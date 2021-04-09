@@ -99,22 +99,23 @@ class SoundcloudCog(commands.Cog):
                 url = track['user']['permalink_url'],
                 icon_url = track['user']['avatar_url']) \
             .set_thumbnail(url = track['artwork_url'] or track['user']['avatar_url'])
-        embed.description = track['description'][:2048]
+        embed.description = track['description'][:2048] if track['description'] else ""
         embed.title = track['title'][:256]
         embed.url = track['permalink_url']
         embed.timestamp = datetime.datetime.fromisoformat(
             track['created_at'].replace('Z', '+00:00')
         )
-        if not from_tag:
-            db.add_sc_artist_track(track['id'])
-        else:
-            db.add_sc_tag_track(from_tag, track['id'])
         for channel_id in channels:
-            channel = self.bot.get_channel(channel_id)
-            if channel:
-                await channel.send(embed=embed)
-            else:
-                db.delete_channel(channel_id)
+            if not db.sc_channel_track_exists(channel_id, track['id']):
+                if not from_tag:
+                    db.add_sc_track(channel_id, track['id'])
+                else:
+                    db.add_sc_track(channel_id, track['id'], from_tag)
+                channel = self.bot.get_channel(channel_id)
+                if channel:
+                    await channel.send(embed=embed)
+                else:
+                    db.delete_channel(channel_id)
 
     async def __update_following(self):
         await sc.update_following()
@@ -124,9 +125,8 @@ class SoundcloudCog(commands.Cog):
         async for track, channels in sc.update_artists(hour_before):
             try:
                 await self.__send_track_embeds(track, channels)
-            except Exception as e:
-                logger.info(f'Could not send embed for track {track}')
-                logger.info(e)
+            except:
+                logger.exception(f'Could not send embed for track {track}')
             
 
     async def __update_tags(self):
@@ -134,13 +134,13 @@ class SoundcloudCog(commands.Cog):
         async for tag, track, channels in sc.update_tags(hour_before):
             try:
                 await self.__send_track_embeds(track, channels, tag)
-            except Exception as e:
-                logger.info(f'Could not send embed for track {track}')
-                logger.info(e)
+            except:
+                logger.exception(f'Could not send embed for track {track}')
 
     @tasks.loop(minutes=1)
     async def __check_update(self):
         if not self.updating:
+            logger.debug('Updating...')
             self.updating = True
             try:
                 await self.__update_following()
