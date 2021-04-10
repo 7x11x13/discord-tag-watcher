@@ -103,9 +103,6 @@ class SoundcloudCog(commands.Cog):
                 else:
                     db.delete_channel(channel_id)
 
-    async def __update_following(self):
-        await sc.update_following()
-
     async def __update_artists(self):
         hour_before = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=1)
         async for track, channels in sc.update_artists(max(hour_before, self.start_time)):
@@ -123,13 +120,16 @@ class SoundcloudCog(commands.Cog):
             except:
                 logger.exception(f'Could not send embed for track {track}')
 
+    @tasks.loop(hours=1)
+    async def __update_following(self):
+        await sc.update_following()
+
     @tasks.loop(minutes=1)
     async def __check_update(self):
         if not self.updating:
             logger.debug('Updating...')
             self.updating = True
             try:
-                await self.__update_following()
                 await self.__update_artists()
                 await self.__update_tags()
             except:
@@ -137,8 +137,12 @@ class SoundcloudCog(commands.Cog):
             finally:
                 self.updating = False
 
+    @__update_following.before_loop
+    async def __before_update_following(self):
+        await self.bot.wait_until_ready()
+
     @__check_update.before_loop
-    async def wait_for_ready(self):
+    async def __before_check_update(self):
         await self.bot.wait_until_ready()
 
     #reload sql db every 24 hours
