@@ -75,21 +75,6 @@ class SoundcloudCog(commands.Cog):
             logger.info(f'Could not follow tag "{tag}"')
             await ctx.send(f'Could not follow tag `{tag}`')
 
-    @commands.command(name='listtracking')
-    async def list_tracking(self, ctx):
-        for username in db.get_all_sc_following(ctx.channel.id):
-            await ctx.send(f'https://soundcloud.com/{username}')
-
-    @commands.command(name='listfollowing')
-    async def list_artists(self, ctx):
-        for username in db.get_all_sc_artists(ctx.channel.id):
-            await ctx.send(f'https://soundcloud.com/{username}')
-
-    @commands.command(name='listtags')
-    async def list_tags(self, ctx):
-        for tag in db.get_all_sc_tags(ctx.channel.id):
-            await ctx.send(f'`{tag}`')
-
     async def __send_track_embeds(self, track, channels, from_tag=None):
         if len(channels) == 0:
             return
