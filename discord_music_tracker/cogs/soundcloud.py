@@ -10,6 +10,7 @@ class SoundcloudCog(commands.Cog):
         self.bot = bot
         self.updating = False
         self.__check_update.start()
+        self.start_time = datetime.datetime.now(datetime.timezone.utc)
 
     @commands.command(name='track')
     @commands.has_permissions(administrator=True)
@@ -107,7 +108,7 @@ class SoundcloudCog(commands.Cog):
 
     async def __update_artists(self):
         hour_before = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=1)
-        async for track, channels in sc.update_artists(hour_before):
+        async for track, channels in sc.update_artists(max(hour_before, self.start_time)):
             try:
                 await self.__send_track_embeds(track, channels)
             except:
@@ -116,7 +117,7 @@ class SoundcloudCog(commands.Cog):
 
     async def __update_tags(self):
         hour_before = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=1)
-        async for tag, track, channels in sc.update_tags(hour_before):
+        async for tag, track, channels in sc.update_tags(max(hour_before, self.start_time)):
             try:
                 await self.__send_track_embeds(track, channels, tag)
             except:
