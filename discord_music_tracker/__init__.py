@@ -8,7 +8,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-__version__ = 'v0.0.1'
+__version__ = 'v0.0.2'
 
 if 'XDG_CONFIG_HOME' in os.environ:
     config_dir = os.path.join(os.environ['XDG_CONFIG_HOME'], 'discord-music-tracker')
@@ -26,6 +26,7 @@ default_config = \
     f"""[discord-music-tracker]
     bot_token =
     soundcloud_client_id = a3e059563d7fd3372b49b37f00a00bcf
+    soundcloud_auth_token =
     database_file = {database_file}"""
 
 config_file = os.path.join(config_dir, 'discord-music-tracker.cfg')

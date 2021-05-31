@@ -12,8 +12,7 @@ base = 'https://api-v2.soundcloud.com'
 endpoints = {
     'resolve':     base + '/resolve',
     'track_info':  base + '/tracks/{}',
-    'tracks': base + '/users/{}/tracks',
-    'following':   base + '/users/{}/followings',
+    'stream':      base + '/stream',
     'tags':        base + '/recent-tracks/{}'
 }
 
@@ -21,9 +20,12 @@ async def get_sc_collection(url):
     params = {
         'client_id': config.get('soundcloud_client_id')
     }
+    headers = {
+        'Authorization': f"OAuth {config.get('soundcloud_auth_token')}"
+    }
     async with aiohttp.ClientSession() as session:
         while url:
-            async with session.get(url, params=params) as r:
+            async with session.get(url, params=params, headers=headers) as r:
                 r.raise_for_status()
                 data = await r.json()
                 if not data or not 'collection' in data:
@@ -32,42 +34,37 @@ async def get_sc_collection(url):
                     yield resource
                 url = data['next_href']
 
-async def get_sc_user_id(username):
-    params = {
-        'url': f'https://soundcloud.com/{username}',
-        'client_id': config.get('soundcloud_client_id')
-    }
-    async with aiohttp.ClientSession() as session:
-        async with session.get(endpoints['resolve'], params=params) as r:
-            r.raise_for_status()
-            data = await r.json()
-            if not data or 'id' not in data:
-                raise ValueError('Invalid username {username}')
-            db.update_sc_username(data['id'], username)
-            return data['id']
-
-async def update_following():
-    for user_id, channel_ids in db.sc_following.items():
-        try:
-            artists = get_sc_collection(endpoints['following'].format(user_id))
-            logger.debug(f'Got artists for {user_id}')
-        except Exception as e:
-            logging.info(f'Error while fetching user {user_id} following')
-            logging.info(e)
-            return
-        async for artist in artists:
-            id = artist['id']
-            for channel_id in channel_ids:
-                db.add_sc_artist(channel_id, id)
-
 async def __valid_tracks(tracks, last_updated, tag=None):
+    logger.debug(f'getting valid tracks for tag={tag}')
     async for track in tracks:
+        if tag is None:
+            track_type = track['type']
+            item_type = 'reposts' if 'repost' in track_type else 'tracks'
+            created_at = track['created_at']
+            reposted_by = track['user']['username']
+            if 'playlist' in track:
+                track = track['playlist']
+            elif 'track' in track:
+                track = track['track']
+            elif 'album' in track:
+                track = track['album']
+            else:
+                raise ValueError(f'Unknown track type for item_type: {track_type}')
+            track['description'] = f'Reposted by {reposted_by}'
+            track['created_at'] = created_at
+            track['type'] = track_type
+            date = datetime.datetime.fromisoformat(
+                track['created_at'].replace('Z', '+00:00')
+            )
+            logger.debug(f'{track["title"]} by {track["user"]["username"]} - {date}')
         id = track['id']
-        if not tag and db.sc_artist_track_exists(id):
+        if tag is None and db.sc_stream_track_exists(id, item_type):
             # already sent this song
             # and any songs before it
+            logger.debug('stream track exists')
             break
-        if tag and db.sc_tag_track_exists(tag, id):
+        if tag is not None and db.sc_tag_track_exists(tag, id):
+            logger.debug('tag track exists')
             break
 
         date = datetime.datetime.fromisoformat(
@@ -75,23 +72,21 @@ async def __valid_tracks(tracks, last_updated, tag=None):
         )
         if date < last_updated:
             # ignore songs before the last updated time
+            logger.debug('song already seen')
             break
+        logger.debug(track['id'])
         yield track
 
-async def update_artists(last_updated):
-    all_fail = True
-    for artist_id, channel_ids in db.sc_artists.items():
-        try:
-            tracks = get_sc_collection(endpoints['tracks'].format(artist_id))
-            all_fail = False
-        except Exception as e:
-            logging.info(f'Error while fetching artist {artist_id} tracks')
-            logging.info(e)
-            continue
-        async for track in __valid_tracks(tracks, last_updated):
-            yield track, channel_ids
-    if all_fail and len(db.sc_artists) > 0:
-        raise Exception('All update_artists failed')
+async def update_stream(last_updated):
+    tracks = get_sc_collection(endpoints['stream'])
+    async for track in __valid_tracks(tracks, last_updated):
+        track_type = track['type']
+        if track_type in ('track-repost', 'playlist-repost', 'album-repost'):
+            yield 'reposts', track, db.sc_stream['reposts']
+            yield 'reposts', track, db.sc_stream['all']
+        elif track_type in ('track', 'playlist', 'album'):
+            yield 'tracks', track, db.sc_stream['tracks']
+            yield 'tracks', track, db.sc_stream['all']
 
 async def update_tags(last_updated):
     all_fail = True
@@ -100,10 +95,10 @@ async def update_tags(last_updated):
             tracks = get_sc_collection(endpoints['tags'].format(tag))
             all_fail = False
         except Exception as e:
-            logging.info(f'Error while fetching tag {tag} tracks')
-            logging.info(e)
+            logger.warning(f'Error while fetching tag {tag} tracks')
+            logger.warning(e)
             continue
-        async for track in __valid_tracks(tracks, last_updated, tag):
+        async for track in __valid_tracks(tracks, last_updated, tag=tag):
             yield tag, track, channel_ids
     if all_fail and len(db.sc_tags) > 0:
         raise Exception('All update_tags failed')

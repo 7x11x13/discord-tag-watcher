@@ -12,49 +12,28 @@ class SoundcloudCog(commands.Cog):
         self.__check_update.start()
         self.start_time = datetime.datetime.now(datetime.timezone.utc)
 
-    @commands.command(name='track')
+    @commands.command(name='followstream')
     @commands.has_permissions(administrator=True)
-    async def add_following(self, ctx, username):
+    async def add_stream(self, ctx, item_type):
+        if item_type not in ('reposts', 'tracks', 'all'):
+            await ctx.send(f'Argument `{item_type}` not valid, must be `reposts`, `tracks`, or `all`')
+            return
         try:
-            user_id = await sc.get_sc_user_id(username)
-            db.add_sc_following(ctx.channel.id, user_id)
-            await ctx.send(f'Successfully tracking `{username}`')
-        except:
-            logger.info(f'Could not track user "{username}"')
-            await ctx.send(f'Could not track `{username}`')
+            db.add_sc_stream(ctx.channel.id, item_type)
+            await ctx.send(f'Successfully following my stream ({item_type})')
+        except Exception:
+            logger.exception(f'Could not follow my stream ({item_type})')
+            await ctx.send(f'Could not follow my stream ({item_type})')
 
-    @commands.command(name='untrack')
+    @commands.command(name='unfollowstream')
     @commands.has_permissions(administrator=True)
-    async def remove_following(self, ctx, username):
+    async def remove_stream(self, ctx):
         try:
-            user_id = await sc.get_sc_user_id(username)
-            db.remove_sc_following(ctx.channel.id, user_id)
-            await ctx.send(f'Successfully stopped tracking `{username}`')
-        except:
-            logger.info(f'Could not stop tracking user "{username}"')
-            await ctx.send(f'Could not stop tracking user `{username}`')
-
-    @commands.command(name='follow')
-    @commands.has_permissions(administrator=True)
-    async def add_artist(self, ctx, username):
-        try:
-            user_id = await sc.get_sc_user_id(username)
-            db.add_sc_artist(ctx.channel.id, user_id)
-            await ctx.send(f'Successfully followed `{username}`')
-        except:
-            logger.info(f'Could not follow user "{username}"')
-            await ctx.send(f'Could not follow `{username}`')
-
-    @commands.command(name='unfollow')
-    @commands.has_permissions(administrator=True)
-    async def remove_artist(self, ctx, username):
-        try:
-            user_id = await sc.get_sc_user_id(username)
-            db.remove_sc_artist(ctx.channel.id, user_id)
-            await ctx.send(f'Successfully unfollowed `{username}`')
-        except:
-            logger.info(f'Could not unfollow user "{username}"')
-            await ctx.send(f'Could not unfollow `{username}`')
+            db.remove_sc_stream(ctx.channel.id)
+            await ctx.send('Successfully unfollowed my stream')
+        except Exception:
+            logger.exception('Could not unfollow my stream')
+            await ctx.send('Could not unfollow my stream')
 
     @commands.command(name='followtag')
     @commands.has_permissions(administrator=True)
@@ -62,8 +41,8 @@ class SoundcloudCog(commands.Cog):
         try:
             db.add_sc_tag(ctx.channel.id, tag)
             await ctx.send(f'Successfully followed tag `{tag}`')
-        except:
-            logger.info(f'Could not follow tag "{tag}"')
+        except Exception:
+            logger.exception(f'Could not follow tag `{tag}`')
             await ctx.send(f'Could not follow tag `{tag}`')
 
     @commands.command(name='unfollowtag')
@@ -72,11 +51,11 @@ class SoundcloudCog(commands.Cog):
         try:
             db.remove_sc_tag(ctx.channel.id, tag)
             await ctx.send(f'Successfully unfollowed tag `{tag}`')
-        except:
-            logger.info(f'Could not follow tag "{tag}"')
+        except Exception:
+            logger.exception(f'Could not follow tag `{tag}`')
             await ctx.send(f'Could not follow tag `{tag}`')
 
-    async def __send_track_embeds(self, track, channels, from_tag=None):
+    async def __send_track_embeds(self, track, channels, from_tag=None, from_type=None):
         if len(channels) == 0:
             return
         embed = discord.Embed() \
@@ -94,20 +73,20 @@ class SoundcloudCog(commands.Cog):
         for channel_id in channels:
             if not db.sc_channel_track_exists(channel_id, track['id']):
                 if not from_tag:
-                    db.add_sc_track(channel_id, track['id'])
+                    db.add_sc_track(channel_id, track['id'], item_type=from_type)
                 else:
-                    db.add_sc_track(channel_id, track['id'], from_tag)
+                    db.add_sc_track(channel_id, track['id'], tag=from_tag)
                 channel = self.bot.get_channel(channel_id)
                 if channel:
                     await channel.send(embed=embed)
                 else:
                     db.delete_channel(channel_id)
 
-    async def __update_artists(self):
+    async def __update_stream(self):
         hour_before = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=1)
-        async for track, channels in sc.update_artists(max(hour_before, self.start_time)):
+        async for item_type, track, channels in sc.update_stream(max(hour_before, self.start_time)):
             try:
-                await self.__send_track_embeds(track, channels)
+                await self.__send_track_embeds(track, channels, from_type=item_type)
             except:
                 logger.exception(f'Could not send embed for track {track}')
             
@@ -116,13 +95,9 @@ class SoundcloudCog(commands.Cog):
         hour_before = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(hours=1)
         async for tag, track, channels in sc.update_tags(max(hour_before, self.start_time)):
             try:
-                await self.__send_track_embeds(track, channels, tag)
+                await self.__send_track_embeds(track, channels, from_tag=tag)
             except:
                 logger.exception(f'Could not send embed for track {track}')
-
-    @tasks.loop(hours=1)
-    async def __update_following(self):
-        await sc.update_following()
 
     @tasks.loop(minutes=1)
     async def __check_update(self):
@@ -130,23 +105,17 @@ class SoundcloudCog(commands.Cog):
             logger.debug('Updating...')
             self.updating = True
             try:
-                await self.__update_artists()
+                await self.__update_stream()
                 await self.__update_tags()
             except:
                 logger.exception('Exception while updating')
             finally:
                 self.updating = False
 
-    @__update_following.before_loop
-    async def __before_update_following(self):
-        await self.bot.wait_until_ready()
-
     @__check_update.before_loop
     async def __before_check_update(self):
         await self.bot.wait_until_ready()
-
-    #reload sql db every 24 hours
-
+        
 
 def setup(bot):
     bot.add_cog(SoundcloudCog(bot))

@@ -5,7 +5,7 @@ import discord_music_tracker
 setup(
     name='discord-music-tracker',
     version=discord_music_tracker.__version__,
-    packaged=find_packages(),
+    packages=find_packages(),
     author='7x11x13',
     install_requires=[
         'discord',
