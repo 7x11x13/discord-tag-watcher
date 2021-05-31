@@ -41,7 +41,7 @@ async def __valid_tracks(tracks, last_updated, tag=None):
             track_type = track['type']
             item_type = 'reposts' if 'repost' in track_type else 'tracks'
             created_at = track['created_at']
-            reposted_by = track['user']['username']
+            posted_by = track['user']['username']
             if 'playlist' in track:
                 track = track['playlist']
             elif 'track' in track:
@@ -50,7 +50,7 @@ async def __valid_tracks(tracks, last_updated, tag=None):
                 track = track['album']
             else:
                 raise ValueError(f'Unknown track type for item_type: {track_type}')
-            track['description'] = f'Reposted by {reposted_by}'
+            track['reposted_by'] = f'Reposted by {posted_by}'
             track['created_at'] = created_at
             track['type'] = track_type
             date = datetime.datetime.fromisoformat(

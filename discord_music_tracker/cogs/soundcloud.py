@@ -64,7 +64,10 @@ class SoundcloudCog(commands.Cog):
                 url = track['user']['permalink_url'],
                 icon_url = track['user']['avatar_url']) \
             .set_thumbnail(url = track['artwork_url'] or track['user']['avatar_url'])
-        embed.description = track['description'][:2048] if track['description'] else ""
+        if from_type == 'reposts':
+            embed.description = track['reposted_by']
+        else:
+            embed.description = track['description'][:2048] if track['description'] else ""
         embed.title = track['title'][:256]
         embed.url = track['permalink_url']
         embed.timestamp = datetime.datetime.fromisoformat(
