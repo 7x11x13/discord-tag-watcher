@@ -1,7 +1,8 @@
-import discord, datetime
+import discord, datetime, asyncio, glob, os
 from discord.ext import commands, tasks
 
 from discord_music_tracker import logger
+import discord_music_tracker
 import discord_music_tracker.utils.database as db
 import discord_music_tracker.utils.soundcloud as sc
 
@@ -11,6 +12,7 @@ class SoundcloudCog(commands.Cog):
         self.updating = False
         self.__check_update.start()
         self.start_time = datetime.datetime.now(datetime.timezone.utc)
+        self.__clean_song_dir()
 
     @commands.command(name='followstream')
     @commands.has_permissions(administrator=True)
@@ -54,20 +56,45 @@ class SoundcloudCog(commands.Cog):
         except Exception:
             logger.exception(f'Could not follow tag `{tag}`')
             await ctx.send(f'Could not follow tag `{tag}`')
+            
+    def __clean_song_dir(self):
+        song_dir = discord_music_tracker.data_dir
+        for song in glob.glob(os.path.join(song_dir, '*.mp3')):
+            os.remove(song)
+            
+    async def __download_song(self, track):
+        self.__clean_song_dir()
+        song_dir = discord_music_tracker.data_dir
+        p = await asyncio.create_subprocess_shell(
+            f"scdl -l {track['permalink_url']} --onlymp3 --path {song_dir}",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        if await p.wait() == 0:
+            songs = glob.glob(os.path.join(song_dir, '*.mp3'))
+            if len(songs) != 1:
+                logger.error(f'Expected one mp3 file, found {len(songs)}: {songs}')
+                return None
+            return songs[0]
+        logger.error(f'Downloading song {track["permalink_url"]} failed')
+        return None
 
     async def __send_track_embeds(self, track, channels, from_tag=None, from_type=None):
         if len(channels) == 0:
             return
+        song_file = None
+        if from_type == 'tracks' and 'track' in track['type']:
+            # download song with scdl and upload to discord
+            # only download if size is less than 8 MB
+            if track['duration'] / 1000 * 128 / 8 / 1000 <= 8:
+                song_file = await self.__download_song(track)           
         embed = discord.Embed() \
             .set_author(
                 name = track['user']['username'],
                 url = track['user']['permalink_url'],
                 icon_url = track['user']['avatar_url']) \
             .set_thumbnail(url = track['artwork_url'] or track['user']['avatar_url'])
-        if from_type == 'reposts':
-            embed.description = track['reposted_by']
-        else:
-            embed.description = track['description'][:2048] if track['description'] else ""
+        embed.description = track['description'][:2048] if track['description'] else ""
         embed.title = track['title'][:256]
         embed.url = track['permalink_url']
         embed.timestamp = datetime.datetime.fromisoformat(
@@ -81,7 +108,12 @@ class SoundcloudCog(commands.Cog):
                     db.add_sc_track(channel_id, track['id'], tag=from_tag)
                 channel = self.bot.get_channel(channel_id)
                 if channel:
-                    await channel.send(embed=embed)
+                    content = track['discord_message'] if 'discord_message' in track else None
+                    file = discord.File(song_file) if song_file is not None else None
+                    await channel.send(content=content, embed=embed, file=file)
+                    if song_file is not None:
+                        # delete all song files
+                        self.__clean_song_dir()
                 else:
                     db.delete_channel(channel_id)
 
@@ -90,8 +122,8 @@ class SoundcloudCog(commands.Cog):
         async for item_type, track, channels in sc.update_stream(max(hour_before, self.start_time)):
             try:
                 await self.__send_track_embeds(track, channels, from_type=item_type)
-            except:
-                logger.exception(f'Could not send embed for track {track}')
+            except Exception as err:
+                logger.exception(f'Could not send embed for track {track}: {err}')
             
 
     async def __update_tags(self):
@@ -99,8 +131,8 @@ class SoundcloudCog(commands.Cog):
         async for tag, track, channels in sc.update_tags(max(hour_before, self.start_time)):
             try:
                 await self.__send_track_embeds(track, channels, from_tag=tag)
-            except:
-                logger.exception(f'Could not send embed for track {track}')
+            except Exception as err:
+                logger.exception(f'Could not send embed for track {track}: {err}')
 
     @tasks.loop(minutes=1)
     async def __check_update(self):

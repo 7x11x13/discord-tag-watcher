@@ -44,13 +44,17 @@ async def __valid_tracks(tracks, last_updated, tag=None):
             posted_by = track['user']['username']
             if 'playlist' in track:
                 track = track['playlist']
+                track_data_type = 'Playlist'
             elif 'track' in track:
                 track = track['track']
+                track_data_type = 'Track'
             elif 'album' in track:
                 track = track['album']
+                track_data_type = 'Album'
             else:
                 raise ValueError(f'Unknown track type for item_type: {track_type}')
-            track['reposted_by'] = f'Reposted by {posted_by}'
+            posted_by = f'{track_data_type} by {posted_by}:' if item_type == 'tracks' else f'{track_data_type} reposted by {posted_by}:'
+            track['discord_message'] = posted_by
             track['created_at'] = created_at
             track['type'] = track_type
             date = datetime.datetime.fromisoformat(
