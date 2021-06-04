@@ -79,7 +79,7 @@ class SoundcloudCog(commands.Cog):
                 logger.error(f'Expected one {format} file, found {len(songs)}: {songs}')
                 return None
             song_file = songs[0]
-            if os.fstat(song_file).st_size > discord_music_tracker.config.get('max_attachment_bytes'):
+            if os.stat(song_file).st_size > int(discord_music_tracker.config.get('max_attachment_bytes')):
                 os.remove(song_file)
                 song_file = None
             return song_file
