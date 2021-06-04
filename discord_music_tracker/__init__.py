@@ -25,6 +25,7 @@ database_file = os.path.join(data_dir, 'data.db')
 default_config = \
     f"""[discord-music-tracker]
     bot_token =
+    max_attachment_bytes = 8388250
     soundcloud_client_id = a3e059563d7fd3372b49b37f00a00bcf
     soundcloud_auth_token =
     database_file = {database_file}"""

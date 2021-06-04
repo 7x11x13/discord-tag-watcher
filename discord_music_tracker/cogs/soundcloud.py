@@ -61,21 +61,28 @@ class SoundcloudCog(commands.Cog):
         song_dir = discord_music_tracker.data_dir
         for song in glob.glob(os.path.join(song_dir, '*.mp3')):
             os.remove(song)
+        for song in glob.glob(os.path.join(song_dir, '*.m4a')):
+            os.remove(song)
             
-    async def __download_song(self, track):
+    async def __download_song(self, track, format):
         self.__clean_song_dir()
         song_dir = discord_music_tracker.data_dir
+        flag = '--no-original' if format == 'm4a' else '--onlymp3'
         p = await asyncio.create_subprocess_shell(
-            f"scdl -l {track['permalink_url']} --onlymp3 --path {song_dir}",
+            f"scdl -l {track['permalink_url']} {flag} --path {song_dir}",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
         if await p.wait() == 0:
-            songs = glob.glob(os.path.join(song_dir, '*.mp3'))
+            songs = glob.glob(os.path.join(song_dir, f'*.{format}'))
             if len(songs) != 1:
-                logger.error(f'Expected one mp3 file, found {len(songs)}: {songs}')
+                logger.error(f'Expected one {format} file, found {len(songs)}: {songs}')
                 return None
-            return songs[0]
+            song_file = songs[0]
+            if os.fstat(song_file).st_size > discord_music_tracker.config.get('max_attachment_bytes'):
+                os.remove(song_file)
+                song_file = None
+            return song_file
         logger.error(f'Downloading song {track["permalink_url"]} failed')
         return None
 
@@ -86,8 +93,12 @@ class SoundcloudCog(commands.Cog):
         if from_type == 'tracks' and 'track' in track['type']:
             # download song with scdl and upload to discord
             # only download if size is less than 8 MB
-            if track['duration'] / 1000 * 128 / 8 / 1000 <= 8:
-                song_file = await self.__download_song(track)           
+            size_128_kbps = track['duration'] / 1000 * 128 / 8 / 1000
+            size_256_kbps = size_128_kbps * 2
+            if size_256_kbps <= 9:
+                song_file = await self.__download_song(track, 'm4a')
+            if song_file is None and size_128_kbps <= 9:
+                song_file = await self.__download_song(track, 'mp3')
         embed = discord.Embed() \
             .set_author(
                 name = track['user']['username'],
