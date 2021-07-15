@@ -13,6 +13,16 @@ class SoundcloudCog(commands.Cog):
         self.__check_update.start()
         self.start_time = datetime.datetime.now(datetime.timezone.utc)
         self.__clean_song_dir()
+        
+    @commands.command(name='toggledl')
+    @commands.has_permissions(administrator=True)
+    async def toggle_dl(self, ctx):
+        try:
+            result = db.toggle_dl(ctx.channel.id)
+            await ctx.send(f'Download tracks: {result}')
+        except Exception:
+            logger.exception(f'Could not toggle DLs')
+            await ctx.send(f'Could not toggle DLs')
 
     @commands.command(name='followstream')
     @commands.has_permissions(administrator=True)
@@ -66,6 +76,7 @@ class SoundcloudCog(commands.Cog):
             
     async def __download_song(self, track, format):
         self.__clean_song_dir()
+        logger.debug(f"Downloading {track['permalink_url']}")
         song_dir = discord_music_tracker.data_dir
         flag = '--no-original' if format == 'm4a' else '--onlymp3'
         p = await asyncio.create_subprocess_shell(
@@ -93,7 +104,7 @@ class SoundcloudCog(commands.Cog):
         if len(channels) == 0:
             return
         song_file = None
-        if from_type == 'tracks' and 'track' in track['type']:
+        if (from_type == 'tracks' and 'track' in track['type'] or from_tag) and any(db.is_download_channel(channel) for channel in channels):
             # download song with scdl and upload to discord
             # only download if size is less than 8 MB
             size_128_kbps = track['duration'] / 1000 * 128 / 8 / 1000
@@ -123,7 +134,9 @@ class SoundcloudCog(commands.Cog):
                 channel = self.bot.get_channel(channel_id)
                 if channel:
                     content = track['discord_message'] if 'discord_message' in track else None
-                    file = discord.File(song_file) if song_file is not None else None
+                    file = None
+                    if song_file is not None and db.is_download_channel(channel_id):
+                        file = discord.File(song_file)
                     await channel.send(content=content, embed=embed, file=file)
                     if song_file is not None:
                         # delete all song files

@@ -39,6 +39,8 @@ sc_stream_tracks = {'reposts': DecaySet(), 'tracks': DecaySet()}
 sc_tag_tracks = dict()          # {tag: DecaySet(track_id)}
 sc_channel_tracks = dict()      # {channel_id: DecaySet(tracks)}
 
+sc_download_channels = set()
+
 con = None
 
 def init_db():
@@ -52,6 +54,8 @@ def init_db():
             (channel_id integer NOT NULL UNIQUE, item_type text NOT NULL)''')
     cur.execute('''CREATE TABLE IF NOT EXISTS sc_tags
         (channel_id integer NOT NULL, tag text NOT NULL, UNIQUE(channel_id, tag))''')
+    cur.execute('''CREATE TABLE IF NOT EXISTS sc_download
+        (channel_id integer NOT NULL UNIQUE)''')
 
     con.commit()
 
@@ -71,6 +75,11 @@ def init_db():
     for channel_id, item_type in cur.execute('SELECT * FROM sc_stream'):
         sc_stream_channel[channel_id] = item_type
         sc_stream[item_type].add(channel_id)
+        
+    for row in cur.execute('SELECT * FROM sc_download'):
+        channel_id = row[0]
+        sc_download_channels.add(channel_id)
+        
 
 def add_sc_stream(channel_id, item_type):
     sc_stream_channel[channel_id] = item_type
@@ -157,6 +166,23 @@ def sc_channel_track_exists(channel_id, track_id):
     x = sc_channel_tracks.get(channel_id)
     return x is not None and track_id in x
 
+def toggle_dl(channel_id):
+    cur = con.cursor()
+    ret = None
+    if channel_id in sc_download_channels:
+        sc_download_channels.discard(channel_id)
+        cur.execute('DELETE FROM sc_download WHERE channel_id=?', (channel_id,))
+        ret = False
+    else:
+        sc_download_channels.add(channel_id)
+        cur.execute('INSERT OR IGNORE INTO sc_download VALUES(?)', (channel_id,))
+        ret = True
+    con.commit()
+    return ret
+    
+def is_download_channel(channel_id):
+    return channel_id in sc_download_channels    
+
 def delete_channel(channel):
 
     sc_tags_channel.pop(channel, None)
@@ -167,4 +193,5 @@ def delete_channel(channel):
     cur = con.cursor()
     cur.execute('DELETE FROM sc_stream WHERE channel_id=?', (channel,))
     cur.execute('DELETE FROM sc_tags WHERE channel_id=?', (channel,))
+    cur.execute('DELETE FROM sc_download WHERE channel_id=?', (channel,))
     con.commit()

@@ -13,7 +13,8 @@ endpoints = {
     'resolve':     base + '/resolve',
     'track_info':  base + '/tracks/{}',
     'stream':      base + '/stream',
-    'tags':        base + '/recent-tracks/{}'
+    'tags':        base + '/recent-tracks/{}',
+    'tag_search':  base + '/search/tracks?q=*&filter.genre_or_tag={}&filter.created_at=last_hour&limit=100',
 }
 
 async def get_sc_collection(url):
@@ -32,7 +33,7 @@ async def get_sc_collection(url):
                     return
                 for resource in data['collection']:
                     yield resource
-                url = data['next_href']
+                url = data.get('next_href', None)
 
 async def __valid_tracks(tracks, last_updated, tag=None):
     logger.debug(f'getting valid tracks for tag={tag}')
@@ -41,6 +42,10 @@ async def __valid_tracks(tracks, last_updated, tag=None):
             track_type = track['type']
             item_type = 'reposts' if 'repost' in track_type else 'tracks'
             created_at = track['created_at']
+            if tag:
+                last_modified = track['last_modified']
+            else:
+                last_modified = track['created_at']
             posted_by = track['user']['username']
             if 'playlist' in track:
                 track = track['playlist']
@@ -56,6 +61,7 @@ async def __valid_tracks(tracks, last_updated, tag=None):
             posted_by = f'{track_data_type} by {posted_by}:' if item_type == 'tracks' else f'{track_data_type} reposted by {posted_by}:'
             track['discord_message'] = posted_by
             track['created_at'] = created_at
+            track['last_modified'] = last_modified
             track['type'] = track_type
             date = datetime.datetime.fromisoformat(
                 track['created_at'].replace('Z', '+00:00')
@@ -72,7 +78,7 @@ async def __valid_tracks(tracks, last_updated, tag=None):
             break
 
         date = datetime.datetime.fromisoformat(
-            track['created_at'].replace('Z', '+00:00')
+            track['last_modified'].replace('Z', '+00:00')
         )
         if date < last_updated:
             # ignore songs before the last updated time
