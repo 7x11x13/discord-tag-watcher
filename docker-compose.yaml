@@ -1,0 +1,14 @@
+name: tag-watcher
+
+services:
+  watcher:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    restart: always
+    environment:
+      - CONFIG_FILE_PATH=/app/data/config.json
+      - TAG_CACHE_PATH=/app/data/cache.pkl
+    volumes:
+      - ./data:/app/data

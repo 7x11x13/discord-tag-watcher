@@ -1,0 +1,6 @@
+*.json
+.*
+Dockerfile
+.dockerignore
+__pycache__
+docker-compose.yaml

@@ -1,0 +1,14 @@
+{
+    "tag_cache_size": 20,
+    "watch_interval_s": 10,
+    "links": [
+        {
+            "tags": ["electronic"],
+            "webhook_url": "https://discord.com/xxxxxxxxxxxxxxx"
+        },
+        {
+            "tags": ["UK Garage", "UKG"],
+            "webhook_url": "https://discord.com/xxxxxxxxxxxxxxx"
+        }
+    ]
+}

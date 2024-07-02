@@ -1,4 +1,4 @@
-env
-*.egg-info
+data
 __pycache__
-.vscode
+.venv
+.mypy_cache
