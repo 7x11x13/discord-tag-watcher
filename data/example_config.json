@@ -1,5 +1,6 @@
 {
-    "tag_cache_size": 20,
+    "cache_size": 10,
+    "max_tag_tracks": 10,
     "watch_interval_s": 10,
     "links": [
         {

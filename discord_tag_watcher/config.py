@@ -7,6 +7,7 @@ class ChannelConfig(TypedDict):
 
 
 class WatcherConfig(TypedDict):
-    tag_cache_size: int
+    cache_size: int
+    max_tag_tracks: int
     watch_interval_s: int
     links: list[ChannelConfig]

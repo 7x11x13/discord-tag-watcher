@@ -21,26 +21,26 @@ MAX_DISCORD_EMBED_TITLE_LENGTH = 256
 MAX_DISCORD_EMBED_DESC_LENGTH = 4096
 
 
-# last <tag_cache_size> seen tracks for each tag
+# last <cache_size> seen tracks for each webhook
 seen_tracks: dict[str, deque[int]] = defaultdict(deque)
-tag_cache_size: Optional[int] = None
+cache_size: Optional[int] = None
 
 
-def _update_tag_cache_size(new_size: Optional[int]):
+def _update_cache_size(new_size: Optional[int]):
     global seen_tracks
-    global tag_cache_size
-    if new_size == tag_cache_size:
+    global cache_size
+    if new_size == cache_size:
         return
     new_seen_tracks: dict[str, deque[int]] = defaultdict(lambda: deque(maxlen=new_size))
     for k, v in seen_tracks.items():
         new_seen_tracks[k].extend(v)
     seen_tracks = new_seen_tracks
-    tag_cache_size = new_size
+    cache_size = new_size
 
 
 def _load_seen_tracks():
     global seen_tracks
-    seen_file = os.environ.get("TAG_CACHE_PATH", "data/cache.pkl")
+    seen_file = os.environ.get("CACHE_PATH", "data/cache.pkl")
     try:
         with open(seen_file, "rb") as f:
             seen_tracks = dill.load(f)
@@ -50,7 +50,7 @@ def _load_seen_tracks():
 
 
 def _save_seen_tracks():
-    seen_file = os.environ.get("TAG_CACHE_PATH", "data/cache.pkl")
+    seen_file = os.environ.get("CACHE_PATH", "data/cache.pkl")
     with open(seen_file, "wb") as f:
         dill.dump(seen_tracks, f)
 
@@ -112,7 +112,7 @@ def _watch_tags(tags: list[str], webhook_url: str, max_tracks: int):
     tracks: list[Track] = []
     for tag in tags:
         for track in itertools.islice(client.get_tag_tracks_recent(tag), max_tracks):
-            if track.id in seen_tracks[tag]:
+            if track.id in seen_tracks[webhook_url]:
                 break
             # not seen before track, send to webhook
             if track.id not in seen_ids:
@@ -124,8 +124,7 @@ def _watch_tags(tags: list[str], webhook_url: str, max_tracks: int):
 
     for track in tracks:
         _send_track(track, webhook_url)
-        for tag in tags:
-            seen_tracks[tag].append(track.id)
+        seen_tracks[webhook_url].append(track.id)
     _save_seen_tracks()
 
 
@@ -134,10 +133,10 @@ def main():
     while True:
         try:
             config = _load_config()
-            _update_tag_cache_size(config["tag_cache_size"])
+            _update_cache_size(config["cache_size"])
             logger.debug(f"Config: {config}")
             for link in config["links"]:
-                _watch_tags(link["tags"], link["webhook_url"], config["tag_cache_size"])
+                _watch_tags(link["tags"], link["webhook_url"], config["max_tag_tracks"])
         except Exception:
             logger.exception("Error while watching")
         time.sleep(config["watch_interval_s"])

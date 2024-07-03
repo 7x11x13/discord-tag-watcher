@@ -10,11 +10,13 @@
 
 ```json
 {
-    "tag_cache_size": 20,  // How many recent tracks to store for each tag.
+    "cache_size": 10,      // How many recent tracks to store for each webhook.
+
+    "max_tag_tracks": 10,  // How many recent tracks to fetch for each tag.
                            // Should be more than the number of tracks you
-                           // expect to be uploaded for any given tag in
-                           // the time it takes to complete a scan (including
-                           // the wait time after).
+                           // expect to be uploaded with any of the webhook's
+                           // tags in the time it takes to complete a scan
+                           // (including the wait time after).
 
     "watch_interval_s": 10,  // How many seconds to wait after each scan
 
