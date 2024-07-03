@@ -108,18 +108,25 @@ def _send_track(track: Track, webhook_url: str):
 
 def _watch_tags(tags: list[str], webhook_url: str, max_tracks: int):
     client = _get_client()
+    seen_ids = set()
+    tracks: list[Track] = []
     for tag in tags:
-        tracks: list[Track] = []
         for track in itertools.islice(client.get_tag_tracks_recent(tag), max_tracks):
             if track.id in seen_tracks[tag]:
                 break
             # not seen before track, send to webhook
-            tracks.append(track)
-        # send oldest first
-        for track in reversed(tracks):
-            _send_track(track, webhook_url)
+            if track.id not in seen_ids:
+                tracks.append(track)
+                seen_ids.add(track.id)
+
+    # send oldest first
+    tracks.sort(key=lambda track: track.last_modified.timestamp())
+
+    for track in tracks:
+        _send_track(track, webhook_url)
+        for tag in tags:
             seen_tracks[tag].append(track.id)
-        _save_seen_tracks()
+    _save_seen_tracks()
 
 
 def main():
