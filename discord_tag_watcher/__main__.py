@@ -89,7 +89,7 @@ def _send_track(track: Track, webhook_url: str):
     hook = DiscordWebhook(webhook_url, rate_limit_retry=True)
     hook.username = "SoundCloud"
     hook.avatar_url = "https://a-v2.sndcdn.com/assets/images/brand-1b72dd82.svg"
-    hook.content = track.permalink_url
+    hook.content = track.permalink_url.replace("https://soundcloud.com", "https://fxsoundcloud.pages.dev", 1)
     r = hook.execute()
     r.raise_for_status()
 
