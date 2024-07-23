@@ -88,20 +88,8 @@ def _load_config() -> WatcherConfig:
 def _send_track(track: Track, webhook_url: str):
     hook = DiscordWebhook(webhook_url, rate_limit_retry=True)
     hook.username = "SoundCloud"
-    hook.add_embed(
-        DiscordEmbed(
-            title=track.title[:MAX_DISCORD_EMBED_TITLE_LENGTH],
-            description=(track.description or "")[:MAX_DISCORD_EMBED_DESC_LENGTH],
-            url=track.permalink_url,
-            timestamp=track.last_modified.timestamp(),
-            thumbnail={"url": track.artwork_url},
-            author={
-                "name": track.user.username,
-                "url": track.user.permalink_url,
-                "icon_url": track.user.avatar_url,
-            },
-        )
-    )
+    hook.avatar_url = "https://a-v2.sndcdn.com/assets/images/brand-1b72dd82.svg"
+    hook.content = track.permalink_url
     r = hook.execute()
     r.raise_for_status()
 
