@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "discord-tag-watcher"
-version = "0.1.0"
+version = "1.0.0"
 description = "SoundCloud tag watching via Discord webhooks"
 authors = ["7x11x13 <x7x11x13@gmail.com>"]
 license = "MIT"
